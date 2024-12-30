@@ -79,16 +79,18 @@ void loop() {
   //Serial.println(effectNumber);
   
 
-  if (readingSensor) {
-    sensors_event_t event;
-    tsl.getEvent(&event);
-    
-    if (event.light) {
-      LDRValue = event.light;
-    } else {
-      // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-      LDRValue = 0;
-    }
+  if (!turnOffMotion) {
+    if (readingSensor) {
+      sensors_event_t event;
+      tsl.getEvent(&event);
+      
+      if (event.light) {
+        LDRValue = event.light;
+      } else {
+        // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
+        LDRValue = 0;
+      }
+  }
 
     motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
     //Serial.println(motionDetected);
