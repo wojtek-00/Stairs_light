@@ -33,7 +33,7 @@ unsigned long delayOffInterval = 5000;
 unsigned long delayDimmInterval = 5000;
 
 
-// LIGHT VALUES
+// LIGHT SENSOR VALUES
 int lvlYellowLight = 10;
 int lvlWhiteLight = 100;
 
@@ -43,12 +43,12 @@ void setup() {
   pinMode(pins[0], OUTPUT);
   pinMode(pins[1], OUTPUT);
   Serial.begin(9600);
+  Serial.println("SET UP");
 
 
   // LIGHT SENSOR
-  Wire.setClock(50000); // Ustaw prędkość na 50 kHz
+  //Wire.setClock(50000); // Ustaw prędkość na 50 kHz
 
-  Serial.begin(9600);
   Wire.begin(); // Inicjalizacja I2C bez określania pinów (SDA = A4, SCL = A5 dla Arduino Uno)
 
   // Inicjalizacja czujnika
@@ -67,6 +67,7 @@ void setup() {
 }
 
 void loop() {
+  Serial.println("Loop Function");
   int effectNumber = 0;
   if (Serial.available() > 0) {           // input in terminal
     commandNumber = Serial.parseInt();
@@ -86,12 +87,14 @@ void loop() {
       
       if (event.light) {
         LDRValue = event.light;
+        //Serial.println(LDRValue);
       } else {
         // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
         LDRValue = 0;
       }
   }
 
+    Serial.println(LDRValue);
     motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
     //Serial.println(motionDetected);
 
