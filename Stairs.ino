@@ -28,14 +28,13 @@ int motionDetected = 0;
 int LDRValue = 0;
 unsigned long lastTriggerSignalTime = 0;
 
-unsigned long delayInterval = 3000;
-unsigned long delayOffInterval = 5000;
-unsigned long delayDimmInterval = 5000;
+unsigned long delayDimmInterval = 180000; // Time after that the light will be dimmed
+unsigned long delayOffInterval = 900000;  // Time after that the light will be turned off
 
 
 // LIGHT SENSOR VALUES
-int lvlYellowLight = 10;
-int lvlWhiteLight = 100;
+int lvlYellowLight = 4;
+int lvlWhiteLight = 40;
 
 
 
@@ -73,34 +72,36 @@ void setup() {
 
 void loop() {
   int effectNumber = 0;
-  /*
+  
   if (Serial.available() > 0) {           // input in terminal
     commandNumber = Serial.parseInt();
     //Serial.println(commandNumber);
   }
-*/
+
   if (commandNumber != 0) {
     effectNumber = commandNumber;
   }
   //Serial.println(effectNumber);
   
 
-  if (!turnOffMotion) {
-    if (readingSensor) {
-      sensors_event_t event;
-      tsl.getEvent(&event);
-      
-      if (event.light) {
-        LDRValue = event.light;
-      } else {
-        // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-        LDRValue = 0;
+  if (true) {
+    if (!turnOffMotion){
+      if (readingSensor) {
+        sensors_event_t event;
+        tsl.getEvent(&event);
+        
+        if (event.light) {
+          LDRValue = event.light;
+        } else {
+          // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
+          LDRValue = 0;
+        }
       }
   }
 
     //Serial.println(LDRValue);
-    motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
-    Serial.println(motionDetected);
+    motionDetected = /* digitalRead(PIR_PIN_BASEMENT) || */ digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
+    //Serial.println(motionDetected);
 
     //Serial.println(LDRValue);
 
@@ -108,14 +109,14 @@ void loop() {
       lastTriggerSignalTime = millis(); 
     }
 
-    if (LDRValue < lvlYellowLight && !turnOffMotion) {
+    if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
       if (motionDetected == HIGH) {
         Serial.println("Yellow Light");
         effectNumber = 2;
         turnOffMotion = true;
         toDimm = true;
       }
-    } else if (LDRValue < lvlWhiteLight && !turnOffMotion) {
+    } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
       if (motionDetected == HIGH) {
         Serial.println("White Light");
         effectNumber = 3;
@@ -162,17 +163,17 @@ void selectCommand(int command) {
       break;
     case 2:   // Yellow
       newValues[0] = 20;  // White Light
-      newValues[1] = 50; // Yellow Light
+      newValues[1] = 50;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 255;
+      newValues[0] = 180; // Docelowe wartości
+      newValues[1] = 0;
       changeIntensity(newValues);
       break;
     case 4:
-      newValues[0] = 255; // Docelowe wartości
-      newValues[1] = 0;
+      newValues[0] = 0; // Docelowe wartości
+      newValues[1] = 10;
       changeIntensity(newValues);
   }
 }
@@ -200,7 +201,7 @@ void changeIntensity(int targetValues[]) {
         analogWrite(pins[i], tempValues[i]); // Ustawienie nowej wartości PWM
       }
     }
-    delay(5); // Małe opóźnienie dla płynniejszej zmiany
+    delay(10); // Małe opóźnienie dla płynniejszej zmiany
   }
 
   // Aktualizacja globalnych wartości
