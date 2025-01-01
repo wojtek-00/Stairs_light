@@ -6,7 +6,7 @@
 Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
 
-int pins[2] = {5, 6};           // Piny wyjściowe
+int pins[2] = {5, 6};           // Piny wyjściowe -> 5. White, 6. Yellow
 int values[2] = {0, 0};         // Aktualne wartości PWM
 int newValues[2] = {0, 0};      // Docelowe wartości PWM
 
@@ -73,11 +73,12 @@ void setup() {
 
 void loop() {
   int effectNumber = 0;
+  /*
   if (Serial.available() > 0) {           // input in terminal
     commandNumber = Serial.parseInt();
     //Serial.println(commandNumber);
   }
-
+*/
   if (commandNumber != 0) {
     effectNumber = commandNumber;
   }
@@ -99,7 +100,7 @@ void loop() {
 
     //Serial.println(LDRValue);
     motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
-    //Serial.println(motionDetected);
+    Serial.println(motionDetected);
 
     //Serial.println(LDRValue);
 
@@ -160,18 +161,18 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 50;  // White Light
-      newValues[1] = 130; // Yellow Light
+      newValues[0] = 20;  // White Light
+      newValues[1] = 50; // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
-      newValues[0] = 255; // Docelowe wartości
+      newValues[0] = 0; // Docelowe wartości
       newValues[1] = 255;
       changeIntensity(newValues);
       break;
     case 4:
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 100;
+      newValues[0] = 255; // Docelowe wartości
+      newValues[1] = 0;
       changeIntensity(newValues);
   }
 }
@@ -199,7 +200,7 @@ void changeIntensity(int targetValues[]) {
         analogWrite(pins[i], tempValues[i]); // Ustawienie nowej wartości PWM
       }
     }
-    delay(10); // Małe opóźnienie dla płynniejszej zmiany
+    delay(5); // Małe opóźnienie dla płynniejszej zmiany
   }
 
   // Aktualizacja globalnych wartości
