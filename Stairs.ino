@@ -17,10 +17,10 @@ bool readingSensor = true;
 
 
 // SENSORS
-int PIR_PIN_BASEMENT = 12;
-int PIR_PIN_PORCH = 13;
-int PIR_PIN_1FLOOR = 13;
-int PIR_PIN_2FLOOR = 13;
+int PIR_PIN_BASEMENT = 9;
+int PIR_PIN_PORCH = 10;
+int PIR_PIN_1FLOOR = 11;
+int PIR_PIN_2FLOOR = 12;
 
 bool toDimm = false;
 bool turnOffMotion = false;
@@ -45,6 +45,11 @@ void setup() {
   Serial.begin(9600);
   Serial.println("SET UP");
 
+  pinMode(PIR_PIN_BASEMENT, INPUT);
+  pinMode(PIR_PIN_PORCH, INPUT);
+  pinMode(PIR_PIN_1FLOOR, INPUT);
+  pinMode(PIR_PIN_2FLOOR, INPUT);
+
 
   // LIGHT SENSOR
   //Wire.setClock(50000); // Ustaw prędkość na 50 kHz
@@ -67,7 +72,6 @@ void setup() {
 }
 
 void loop() {
-  Serial.println("Loop Function");
   int effectNumber = 0;
   if (Serial.available() > 0) {           // input in terminal
     commandNumber = Serial.parseInt();
@@ -87,18 +91,17 @@ void loop() {
       
       if (event.light) {
         LDRValue = event.light;
-        //Serial.println(LDRValue);
       } else {
         // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
         LDRValue = 0;
       }
   }
 
-    Serial.println(LDRValue);
+    //Serial.println(LDRValue);
     motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
     //Serial.println(motionDetected);
 
-    Serial.println(LDRValue);
+    //Serial.println(LDRValue);
 
     if (motionDetected == HIGH) {
       lastTriggerSignalTime = millis(); 
@@ -119,7 +122,8 @@ void loop() {
         toDimm = true;
       }
     }
-     if (turnOffMotion && toDimm) {
+
+    if (turnOffMotion && toDimm) {
       if (millis() - lastTriggerSignalTime >= delayDimmInterval) {
         Serial.println("Dimm");
         effectNumber = 4;
@@ -137,9 +141,9 @@ void loop() {
       }
     }
 
-    //Serial.println(millis() - lastTriggerSignalTime);
+      Serial.println(millis() - lastTriggerSignalTime);
     
-  }
+  } //turnOffMotion
   
 
 
