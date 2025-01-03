@@ -28,8 +28,8 @@ int motionDetected = 0;
 int LDRValue = 0;
 unsigned long lastTriggerSignalTime = 0;
 
-unsigned long delayDimmInterval = 180000; // Time after that the light will be dimmed
-unsigned long delayOffInterval = 900000;  // Time after that the light will be turned off
+unsigned long delayDimmInterval = 30000; // Time after that the light will be dimmed
+unsigned long delayOffInterval = 90000;  // Time after that the light will be turned off
 
 
 // LIGHT SENSOR VALUES
@@ -100,7 +100,7 @@ void loop() {
   }
 
     //Serial.println(LDRValue);
-    motionDetected = /* digitalRead(PIR_PIN_BASEMENT) || */ digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR) || digitalRead(PIR_PIN_2FLOOR);
+    motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR)/* || digitalRead(PIR_PIN_2FLOOR)*/;
     //Serial.println(motionDetected);
 
     //Serial.println(LDRValue);
