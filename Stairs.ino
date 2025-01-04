@@ -2,8 +2,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_TSL2561_U.h>
 
-// Utwórz obiekt czujnika TSL2561
-Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
+
 
 
 int pins[2] = {5, 6};           // Piny wyjściowe -> 5. White, 6. Yellow
@@ -17,60 +16,58 @@ bool readingSensor = true;
 
 
 // SENSORS
-int PIR_PIN_BASEMENT = 9;
-int PIR_PIN_PORCH = 10;
-int PIR_PIN_1FLOOR = 11;
-int PIR_PIN_2FLOOR = 12;
+const int NUM_SENSORS = 4;              // Liczba czujników
+const int PIR_PINS[NUM_SENSORS] = {9, 10, 11, 12}; // Piny, do których podłączone są czujniki PIR
+int highCount[NUM_SENSORS] = {0};           // Liczniki dla każdego sensora
+int threshold = 10;                          // Liczba wymaganych sygnałów HIGH
+bool motionDetected = false;
+
 
 bool toDimm = false;
 bool turnOffMotion = false;
-int motionDetected = 0;
 int LDRValue = 0;
 unsigned long lastTriggerSignalTime = 0;
 
-unsigned long delayDimmInterval = 30000; // Time after that the light will be dimmed
-unsigned long delayOffInterval = 90000;  // Time after that the light will be turned off
+unsigned long delayDimmInterval = 20000; // Time after that the light will be dimmed
+unsigned long delayOffInterval = 120000;  // Time after that the light will be turned off
 
 
 // LIGHT SENSOR VALUES
 int lvlYellowLight = 4;
 int lvlWhiteLight = 40;
 
-
+bool readPir = true;
 
 void setup() {
   pinMode(pins[0], OUTPUT);
   pinMode(pins[1], OUTPUT);
   Serial.begin(9600);
-  Serial.println("SET UP");
 
-  pinMode(PIR_PIN_BASEMENT, INPUT);
-  pinMode(PIR_PIN_PORCH, INPUT);
-  pinMode(PIR_PIN_1FLOOR, INPUT);
-  pinMode(PIR_PIN_2FLOOR, INPUT);
+  int setupValues[2] = {0, 0};
+  changeIntensity(setupValues);
+  delay(1000);
+  setupValues[0] = 255;
+  setupValues[1] = 0;
+  changeIntensity(setupValues);
+  delay(1000);
+  setupValues[0] = 0;
+  setupValues[1] = 255;
+  changeIntensity(setupValues);
+  delay(1000);
+  setupValues[0] = 0;
+  setupValues[1] = 0;
+  changeIntensity(setupValues);
 
 
-  // LIGHT SENSOR
-  //Wire.setClock(50000); // Ustaw prędkość na 50 kHz
 
-  Wire.begin(); // Inicjalizacja I2C bez określania pinów (SDA = A4, SCL = A5 dla Arduino Uno)
-
-  // Inicjalizacja czujnika
-  if (!tsl.begin()) {
-    Serial.println("Nie można znaleźć czujnika TSL2561. Sprawdź połączenia!");
-    while (1); // Zatrzymanie programu, jeśli czujnik nie jest znaleziony
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    pinMode(PIR_PINS[i], INPUT);
   }
-  
-  Serial.println("Czujnik TSL2561 znaleziony!");
 
-  // Opcjonalne ustawienia czujnika
-  tsl.enableAutoRange(true);            // Automatyczne dostosowanie zakresu
-  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS); // Krótki czas integracji
-  
-  Serial.println("Czujnik gotowy do pracy!");
 }
 
 void loop() {
+  motionDetected = 0;
   int effectNumber = 0;
   
   if (Serial.available() > 0) {           // input in terminal
@@ -81,29 +78,42 @@ void loop() {
   if (commandNumber != 0) {
     effectNumber = commandNumber;
   }
-  //Serial.println(effectNumber);
   
 
   if (true) {
-    if (!turnOffMotion){
-      if (readingSensor) {
-        sensors_event_t event;
-        tsl.getEvent(&event);
+  //   if (!turnOffMotion){
+  //     if (readingSensor) {
+  //       sensors_event_t event;
+  //       tsl.getEvent(&event);
         
-        if (event.light) {
-          LDRValue = event.light;
-        } else {
-          // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-          LDRValue = 0;
-        }
-      }
+  //       if (event.light) {
+  //         LDRValue = event.light;
+  //       } else {
+  //         // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
+  //         LDRValue = 0;
+  //       }
+  //     }
+  // }
+
+    LDRValue = 15;
+    
+    for (int i = 0; i < NUM_SENSORS; i++) {
+    int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
+
+    if (pirState == HIGH) {
+      highCount[i]++; // Zwiększ licznik dla danego sensora
+    } else {
+      highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
+    }
+
+    if (highCount[i] >= threshold) {
+      Serial.print("Motion Detected on Sensor ");
+      Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
+      motionDetected = true; // Ustawia flagę ruchu
+      highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
+    }
   }
-
-    //Serial.println(LDRValue);
-    motionDetected = digitalRead(PIR_PIN_BASEMENT) || digitalRead(PIR_PIN_PORCH) || digitalRead(PIR_PIN_1FLOOR)/* || digitalRead(PIR_PIN_2FLOOR)*/;
-    //Serial.println(motionDetected);
-
-    //Serial.println(LDRValue);
+  
 
     if (motionDetected == HIGH) {
       lastTriggerSignalTime = millis(); 
@@ -144,6 +154,7 @@ void loop() {
     }
 
       Serial.println(millis() - lastTriggerSignalTime);
+      //printTime(millis() - lastTriggerSignalTime);
     
   } //turnOffMotion
   
@@ -152,6 +163,18 @@ void loop() {
 
 
   selectCommand(effectNumber);
+}
+
+void printTime(unsigned long time) {
+  static unsigned long previousSecond = 0;
+  unsigned long currentSecond = time / 1000; // Obliczenie liczby sekund
+
+  // Wyświetlanie tylko, gdy zmienia się pełna sekunda
+  if (currentSecond != previousSecond) {
+    Serial.print("TIME:");
+    Serial.println(currentSecond);
+    previousSecond = currentSecond; // Aktualizacja ostatniej wyświetlonej sekundy
+  }
 }
 
 void selectCommand(int command) {
@@ -167,8 +190,8 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 3:
-      newValues[0] = 180; // Docelowe wartości
-      newValues[1] = 0;
+      newValues[0] = 0; // Docelowe wartości
+      newValues[1] = 30;
       changeIntensity(newValues);
       break;
     case 4:
