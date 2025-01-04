@@ -12,7 +12,6 @@ int newValues[2] = {0, 0};      // Docelowe wartości PWM
 
 int commandNumber = 0;
 
-bool readingSensor = true;
 
 
 // SENSORS
@@ -33,10 +32,30 @@ unsigned long delayOffInterval = 120000;  // Time after that the light will be t
 
 
 // LIGHT SENSOR VALUES
-int lvlYellowLight = 4;
-int lvlWhiteLight = 40;
+int lvlYellowLight = 7;
+int lvlWhiteLight = 30;
 
 bool readPir = true;
+
+
+// DAY MODE
+bool dayModeFlag = false;
+int dayLightValue = 30;
+unsigned long tempOffTime = 0;
+
+const int buttonPin = 7;      // Pin, do którego podłączony jest przycisk
+int buttonState = 0;          // Zmienna przechowująca stan przycisku
+int lastButtonState = 0;      // Ostatni stan przycisku
+unsigned long lastDebounceTime = 0;  // Czas ostatniej zmiany stanu
+unsigned long debounceDelay = 50;    // Czas debouncingu w milisekundach
+unsigned long clickTimeout = 1000;   // Czas oczekiwania na zakończenie zliczania kliknięć (w milisekundach)
+int clickCount = 0;           // Liczba kliknięć przycisku
+unsigned long lastClickTime = 0;    // Czas ostatniego kliknięcia
+bool isCounting = false;      // Flaga, która określa, czy liczymy kliknięcia
+
+bool disableBySwitch = false;
+bool isOnFlag = false;
+
 
 void changeIntensity(int targetValues[], int delayTime = 10);
 
@@ -62,6 +81,7 @@ void setup() {
   // setupValues[1] = 0;
   changeIntensity(setupValues);
 
+  pinMode(buttonPin, INPUT_PULLUP);
 
   Serial.println("  Configure PIR");
   for (int i = 0; i < NUM_SENSORS; i++) {
@@ -91,24 +111,131 @@ void loop() {
   if (commandNumber != 0) {
     effectNumber = commandNumber;
   }
+
+  //####################  BUTTON   ###########################
+  // Odczyt stanu przycisku
+  int reading = digitalRead(buttonPin);
+
+  // Sprawdzanie, czy stan przycisku się zmienił
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();  // Zapisz czas zmiany stanu
+  }
+
+  // Jeśli upłynął wymagany czas debouncingu, zaktualizuj stan przycisku
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+
+      // Sprawdzenie, czy przycisk jest wciśnięty
+      if (buttonState == LOW) {
+        // Jeżeli przycisk został naciśnięty, zliczamy kliknięcia
+        if (!isCounting) {
+          clickCount = 0;  // Resetowanie liczby kliknięć przed rozpoczęciem liczenia
+          isCounting = true;  // Rozpoczynamy liczenie kliknięć
+          lastClickTime = millis();  // Zapisz czas pierwszego kliknięcia
+        }
+        clickCount++;  // Zwiększamy liczbę kliknięć
+        Serial.print("Liczba kliknięć: ");
+        Serial.println(clickCount);
+      }
+    }
+  }
+
+  // Sprawdzanie, czy upłynął czas na zakończenie liczenia kliknięć
+  if (isCounting && (millis() - lastClickTime) > clickTimeout) {
+    // Po upływie czasu (np. 1 sekunda), interpretujemy liczbę kliknięć
+    static int onValues[2] = {0, 0};
+      switch (clickCount) {
+        case 1:
+          // turn on
+          if (isOnFlag) {
+            Serial.println("Turn Off");
+            disableBySwitch = true;
+            onValues[0] = 0;
+            onValues[1] = 0;
+            changeIntensity(onValues);
+            isOnFlag = false;
+          } else {
+            Serial.println("Turn On");
+            disableBySwitch = true;
+            onValues[0] = 255;
+            onValues[1] = 0;
+            changeIntensity(onValues);
+            isOnFlag = true;
+          }
+          break;
+        case 2:
+          // default sensors
+          Serial.println("Sensors");
+          int onDelay = 200;
+          delay(onDelay);
+          analogWrite(pins[0], 0);
+          analogWrite(pins[1], 0);
+          delay(onDelay);
+          analogWrite(pins[0], 100);
+          analogWrite(pins[1], 0);
+          delay(onDelay);
+          analogWrite(pins[0], 0);
+          analogWrite(pins[1], 0);
+          delay(onDelay);
+          analogWrite(pins[0], 0);
+          analogWrite(pins[1], 100);
+          delay(onDelay);
+          analogWrite(pins[0], 0);
+          analogWrite(pins[1], 0);
+          delay(onDelay);
+          analogWrite(pins[0], 100);
+          analogWrite(pins[1], 0);
+          delay(onDelay);
+          delay(onDelay);
+          analogWrite(pins[0], 0);
+          analogWrite(pins[1], 0);
+          onValues[0] = 0;
+          onValues[1] = 0;
+          changeIntensity(onValues);
+          delay(onDelay);
+          delay(100);
+
+          disableBySwitch = false;
+          turnOffMotion = false;
+          toDimm = false;
+          break;
+      }
+    // Resetowanie i przygotowanie do następnego cyklu
+    isCounting = false;
+    clickCount = 0;
+  }
+
+  // Zapisz aktualny stan przycisku
+  lastButtonState = reading;
+
+
+  //###############################################
   
 
-  if (true) {
+  if (!disableBySwitch) {
     if (!turnOffMotion){
-      if (readingSensor) {
-        sensors_event_t event;
-        tsl.getEvent(&event);
-        
-        if (event.light) {
-          LDRValue = event.light;
-        } else {
-          // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-          LDRValue = 0;
-        }
+      sensors_event_t event;
+      tsl.getEvent(&event);
+      
+      if (event.light) {
+        LDRValue = event.light;
+      } else {
+        // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
+        LDRValue = 0;
       }
   }
 
-    Serial.println(LDRValue);
+  if (LDRValue > dayLightValue){
+    dayModeFlag = true;
+    tempOffTime = delayDimmInterval;
+  } else {
+    dayModeFlag = false;
+    tempOffTime = delayOffInterval;
+  }
+
+
+    //Serial.println(LDRValue);
     
     for (int i = 0; i < NUM_SENSORS; i++) {
     int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
@@ -120,8 +247,8 @@ void loop() {
     }
 
     if (highCount[i] >= threshold) {
-      Serial.print("Motion Detected on Sensor ");
-      Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
+      //Serial.print("Motion Detected on Sensor ");
+      //Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
       motionDetected = true; // Ustawia flagę ruchu
       highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
     }
@@ -132,20 +259,29 @@ void loop() {
       lastTriggerSignalTime = millis(); 
     }
 
-    if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
-      if (motionDetected == HIGH) {
-        Serial.println("Yellow Light");
-        effectNumber = 2;
-        turnOffMotion = true;
-        toDimm = true;
+    if (!dayModeFlag) {
+      if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
+        if (motionDetected == HIGH) {
+          Serial.println("Yellow Light");
+          effectNumber = 3;
+          turnOffMotion = true;
+          toDimm = true;
+        }
+      } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
+        if (motionDetected == HIGH) {
+          Serial.println("White Light");
+          effectNumber = 2;
+          turnOffMotion = true;
+          toDimm = true;
+        }
       }
-    } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
-      if (motionDetected == HIGH) {
-        Serial.println("White Light");
-        effectNumber = 3;
-        turnOffMotion = true;
-        toDimm = true;
-      }
+    } else if (dayModeFlag) {
+        if (motionDetected == HIGH) {
+          Serial.println("Day Light");
+          effectNumber = 5;
+          turnOffMotion = true;
+          toDimm = false;
+        }
     }
 
     if (turnOffMotion && toDimm) {
@@ -158,7 +294,7 @@ void loop() {
     }
 
     if (turnOffMotion) {
-      if (millis() - lastTriggerSignalTime >= delayOffInterval) {
+      if (millis() - lastTriggerSignalTime >= tempOffTime) {
         Serial.println("Turn Off");
         effectNumber = 1;
         turnOffMotion = false;
@@ -166,7 +302,7 @@ void loop() {
       }
     }
 
-      Serial.println(millis() - lastTriggerSignalTime);
+      //Serial.println(millis() - lastTriggerSignalTime);
       //printTime(millis() - lastTriggerSignalTime);
     
   } //turnOffMotion
@@ -198,13 +334,13 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 20;  // White Light
-      newValues[1] = 30;  // Yellow Light
+      newValues[0] = 15;  // White Light
+      newValues[1] = 25;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 40;
+      newValues[1] = 30;
       changeIntensity(newValues);
       break;
     case 4:
