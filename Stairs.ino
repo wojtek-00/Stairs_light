@@ -117,10 +117,10 @@ void loop() {
 
   if (LDRValue > dayLightValue){
     dayModeFlag = true;
-    tempOffTime = delayOffInterval;
+    tempOffTime = delayDimmInterval;
   } else {
     dayModeFlag = false;
-    tempOffTime = delayDimmInterval;
+    tempOffTime = delayOffInterval;
   }
 
 
