@@ -38,6 +38,8 @@ int lvlWhiteLight = 40;
 
 bool readPir = true;
 
+void changeIntensity(int targetValues[], int delayTime = 10);
+
 void setup() {
   Serial.println("Setup: ");
   pinMode(pins[0], OUTPUT);
@@ -46,18 +48,18 @@ void setup() {
 
   Serial.println("  Check LEDs");
   int setupValues[2] = {0, 0};
-  changeIntensity(setupValues);
-  delay(1000);
-  setupValues[0] = 255;
-  setupValues[1] = 0;
-  changeIntensity(setupValues);
-  delay(1000);
-  setupValues[0] = 0;
-  setupValues[1] = 255;
-  changeIntensity(setupValues);
-  delay(1000);
-  setupValues[0] = 0;
-  setupValues[1] = 0;
+  // changeIntensity(setupValues);
+  // delay(1000);
+  // setupValues[0] = 255;
+  // setupValues[1] = 0;
+  // changeIntensity(setupValues);
+  // delay(1000);
+  // setupValues[0] = 0;
+  // setupValues[1] = 255;
+  // changeIntensity(setupValues);
+  // delay(1000);
+  // setupValues[0] = 0;
+  // setupValues[1] = 0;
   changeIntensity(setupValues);
 
 
@@ -92,21 +94,21 @@ void loop() {
   
 
   if (true) {
-  //   if (!turnOffMotion){
-  //     if (readingSensor) {
-  //       sensors_event_t event;
-  //       tsl.getEvent(&event);
+    if (!turnOffMotion){
+      if (readingSensor) {
+        sensors_event_t event;
+        tsl.getEvent(&event);
         
-  //       if (event.light) {
-  //         LDRValue = event.light;
-  //       } else {
-  //         // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-  //         LDRValue = 0;
-  //       }
-  //     }
-  // }
+        if (event.light) {
+          LDRValue = event.light;
+        } else {
+          // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
+          LDRValue = 0;
+        }
+      }
+  }
 
-    LDRValue = 15;
+    Serial.println(LDRValue);
     
     for (int i = 0; i < NUM_SENSORS; i++) {
     int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
@@ -197,24 +199,30 @@ void selectCommand(int command) {
       break;
     case 2:   // Yellow
       newValues[0] = 20;  // White Light
-      newValues[1] = 50;  // Yellow Light
+      newValues[1] = 30;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 30;
+      newValues[1] = 40;
       changeIntensity(newValues);
       break;
     case 4:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 10;
-      changeIntensity(newValues);
+      newValues[1] = 5;
+      changeIntensity(newValues, 20);
+      break;
+    case 5:
+      newValues[0] = 10; // Docelowe wartości
+      newValues[1] = 0;
+      changeIntensity(newValues, 20);
+      break;
   }
 }
 
 
 
-void changeIntensity(int targetValues[]) {
+void changeIntensity(int targetValues[], int delayTime = 10) {
   int tempValues[2];          // Tymczasowe wartości PWM
   for (int i = 0; i < 2; i++) {
     tempValues[i] = values[i];
@@ -235,7 +243,7 @@ void changeIntensity(int targetValues[]) {
         analogWrite(pins[i], tempValues[i]); // Ustawienie nowej wartości PWM
       }
     }
-    delay(10); // Małe opóźnienie dla płynniejszej zmiany
+    delay(delayTime); // Małe opóźnienie dla płynniejszej zmiany
   }
 
   // Aktualizacja globalnych wartości
