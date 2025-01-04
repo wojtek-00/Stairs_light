@@ -33,10 +33,17 @@ unsigned long delayOffInterval = 120000;  // Time after that the light will be t
 
 
 // LIGHT SENSOR VALUES
-int lvlYellowLight = 4;
-int lvlWhiteLight = 40;
+int lvlYellowLight = 7;
+int lvlWhiteLight = 30;
 
 bool readPir = true;
+
+
+// DAY MODE
+bool dayModeFlag = false;
+int dayLightValue = 30;
+unsigned long tempOffTime = 0;
+
 
 void changeIntensity(int targetValues[], int delayTime = 10);
 
@@ -108,6 +115,15 @@ void loop() {
       }
   }
 
+  if (LDRValue > dayLightValue){
+    dayModeFlag = true;
+    tempOffTime = delayOffInterval;
+  } else {
+    dayModeFlag = false;
+    tempOffTime = delayDimmInterval;
+  }
+
+
     Serial.println(LDRValue);
     
     for (int i = 0; i < NUM_SENSORS; i++) {
@@ -132,20 +148,29 @@ void loop() {
       lastTriggerSignalTime = millis(); 
     }
 
-    if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
-      if (motionDetected == HIGH) {
-        Serial.println("Yellow Light");
-        effectNumber = 2;
-        turnOffMotion = true;
-        toDimm = true;
+    if (!dayModeFlag) {
+      if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
+        if (motionDetected == HIGH) {
+          Serial.println("Yellow Light");
+          effectNumber = 3;
+          turnOffMotion = true;
+          toDimm = true;
+        }
+      } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
+        if (motionDetected == HIGH) {
+          Serial.println("White Light");
+          effectNumber = 2;
+          turnOffMotion = true;
+          toDimm = true;
+        }
       }
-    } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
-      if (motionDetected == HIGH) {
-        Serial.println("White Light");
-        effectNumber = 3;
-        turnOffMotion = true;
-        toDimm = true;
-      }
+    } else if (dayModeFlag) {
+        if (motionDetected == HIGH) {
+          Serial.println("Day Light");
+          effectNumber = 5;
+          turnOffMotion = true;
+          toDimm = false;
+        }
     }
 
     if (turnOffMotion && toDimm) {
@@ -158,7 +183,7 @@ void loop() {
     }
 
     if (turnOffMotion) {
-      if (millis() - lastTriggerSignalTime >= delayOffInterval) {
+      if (millis() - lastTriggerSignalTime >= tempOffTime) {
         Serial.println("Turn Off");
         effectNumber = 1;
         turnOffMotion = false;
@@ -198,13 +223,13 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 20;  // White Light
-      newValues[1] = 30;  // Yellow Light
+      newValues[0] = 15;  // White Light
+      newValues[1] = 25;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 40;
+      newValues[1] = 30;
       changeIntensity(newValues);
       break;
     case 4:
