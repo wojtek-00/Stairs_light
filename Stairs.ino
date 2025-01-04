@@ -3,7 +3,7 @@
 #include <Adafruit_TSL2561_U.h>
 
 
-
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
 int pins[2] = {5, 6};           // Piny wyjściowe -> 5. White, 6. Yellow
 int values[2] = {0, 0};         // Aktualne wartości PWM
@@ -39,10 +39,12 @@ int lvlWhiteLight = 40;
 bool readPir = true;
 
 void setup() {
+  Serial.println("Setup: ");
   pinMode(pins[0], OUTPUT);
   pinMode(pins[1], OUTPUT);
   Serial.begin(9600);
 
+  Serial.println("  Check LEDs");
   int setupValues[2] = {0, 0};
   changeIntensity(setupValues);
   delay(1000);
@@ -59,11 +61,20 @@ void setup() {
   changeIntensity(setupValues);
 
 
-
+  Serial.println("  Configure PIR");
   for (int i = 0; i < NUM_SENSORS; i++) {
     pinMode(PIR_PINS[i], INPUT);
   }
 
+  Serial.println("  Configure TSL");
+  // Automatyczna kontrola wzmocnienia
+  tsl.enableAutoRange(false);
+  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
+  Serial.println("    Sensor configured");
+
+  Serial.println("Setup done!");
+  delay(2000);
+  Serial.flush();
 }
 
 void loop() {
