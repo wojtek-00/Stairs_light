@@ -54,6 +54,7 @@ unsigned long lastClickTime = 0;    // Czas ostatniego kliknięcia
 bool isCounting = false;      // Flaga, która określa, czy liczymy kliknięcia
 
 bool disableBySwitch = false;
+bool isOnFlag = false;
 
 
 void changeIntensity(int targetValues[], int delayTime = 10);
@@ -147,21 +148,23 @@ void loop() {
       switch (clickCount) {
         case 1:
           // turn on
-          Serial.println("Turn On");
-          disableBySwitch = true;
-          onValues[0] = 255;
-          onValues[1] = 0;
-          changeIntensity(onValues);
+          if (isOnFlag) {
+            Serial.println("Turn Off");
+            disableBySwitch = true;
+            onValues[0] = 0;
+            onValues[1] = 0;
+            changeIntensity(onValues);
+            isOnFlag = false;
+          } else {
+            Serial.println("Turn On");
+            disableBySwitch = true;
+            onValues[0] = 255;
+            onValues[1] = 0;
+            changeIntensity(onValues);
+            isOnFlag = true;
+          }
           break;
         case 2:
-          // turn off
-          Serial.println("Turn Off");
-          disableBySwitch = true;
-          onValues[0] = 0;
-          onValues[1] = 0;
-          changeIntensity(onValues);
-          break; 
-        case 3:
           // default sensors
           Serial.println("Sensors");
           int onDelay = 200;
