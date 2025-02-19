@@ -1,11 +1,19 @@
+#include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_TSL2561_U.h>
+#include <Adafruit_PWMServoDriver.h>
+
+int pinsLight[4][2] = {        // Piny wyjściowe -> 5. White, 6. Yellow
+        {1, 5},
+        {2, 6},
+        {3, 7},
+        {4, 8}
+};
 
 
-Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
-int pins[2] = {5, 6};           // Piny wyjściowe -> 5. White, 6. Yellow
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40); // Adres domyślny 0x40
+
+
 int values[2] = {0, 0};         // Aktualne wartości PWM
 int newValues[2] = {0, 0};      // Docelowe wartości PWM
 
@@ -59,10 +67,20 @@ bool isOnFlag = false;
 
 void changeIntensity(int targetValues[], int delayTime = 10);
 
+void selectCommand(int command);
+
 void setup() {
   Serial.println("Setup: ");
-  pinMode(pins[0], OUTPUT);
-  pinMode(pins[1], OUTPUT);
+
+  Wire.begin();
+  pwm.begin();
+
+  for (int cntPins = 0; cntPins < 4; cntPins++) {
+    for (int i = 0; i < 2; i++){
+      pinMode(pinsLight[cntPins][i], OUTPUT);
+    }
+  }
+
   Serial.begin(9600);
 
   Serial.println("  Check LEDs");
@@ -88,15 +106,6 @@ void setup() {
     pinMode(PIR_PINS[i], INPUT);
   }
 
-  Serial.println("  Configure TSL");
-  // Automatyczna kontrola wzmocnienia
-  tsl.enableAutoRange(false);
-  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
-  Serial.println("    Sensor configured");
-
-  Serial.println("Setup done!");
-  delay(2000);
-  Serial.flush();
 }
 
 void loop() {
@@ -158,7 +167,7 @@ void loop() {
           } else {
             Serial.println("Turn On");
             disableBySwitch = true;
-            onValues[0] = 255;
+            onValues[0] = 4096;
             onValues[1] = 0;
             changeIntensity(onValues);
             isOnFlag = true;
@@ -169,7 +178,7 @@ void loop() {
           Serial.println("Sensors");
           int onDelay = 200;
           delay(onDelay);
-          analogWrite(pins[0], 0);
+         /*  analogWrite(pins[0], 0);
           analogWrite(pins[1], 0);
           delay(onDelay);
           analogWrite(pins[0], 100);
@@ -189,7 +198,7 @@ void loop() {
           delay(onDelay);
           delay(onDelay);
           analogWrite(pins[0], 0);
-          analogWrite(pins[1], 0);
+          analogWrite(pins[1], 0); */
           onValues[0] = 0;
           onValues[1] = 0;
           changeIntensity(onValues);
@@ -215,15 +224,14 @@ void loop() {
 
   if (!disableBySwitch) {
     if (!turnOffMotion){
-      sensors_event_t event;
-      tsl.getEvent(&event);
+      // here logic for light
       
-      if (event.light) {
-        LDRValue = event.light;
+      /* if (// light) {
+        LDRValue = ;
       } else {
         // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
         LDRValue = 0;
-      }
+      } */
   }
 
   if (LDRValue > dayLightValue){
@@ -238,20 +246,20 @@ void loop() {
     //Serial.println(LDRValue);
     
     for (int i = 0; i < NUM_SENSORS; i++) {
-    int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
+      int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
 
-    if (pirState == HIGH) {
-      highCount[i]++; // Zwiększ licznik dla danego sensora
-    } else {
-      highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
-    }
+      if (pirState == HIGH) {
+        highCount[i]++; // Zwiększ licznik dla danego sensora
+      } else {
+        highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
+      }
 
-    if (highCount[i] >= threshold) {
-      //Serial.print("Motion Detected on Sensor ");
-      //Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
-      motionDetected = true; // Ustawia flagę ruchu
-      highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
-    }
+      if (highCount[i] >= threshold) {
+        //Serial.print("Motion Detected on Sensor ");
+        //Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
+        motionDetected = true; // Ustawia flagę ruchu
+        highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
+      }
   }
   
 
@@ -334,22 +342,22 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 15;  // White Light
-      newValues[1] = 25;  // Yellow Light
+      newValues[0] = 2000;  // White Light
+      newValues[1] = 2500;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 30;
+      newValues[1] = 1500;
       changeIntensity(newValues);
       break;
     case 4:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 5;
+      newValues[1] = 800;
       changeIntensity(newValues, 20);
       break;
     case 5:
-      newValues[0] = 10; // Docelowe wartości
+      newValues[0] = 700; // Docelowe wartości
       newValues[1] = 0;
       changeIntensity(newValues, 20);
       break;
@@ -358,7 +366,7 @@ void selectCommand(int command) {
 
 
 
-void changeIntensity(int targetValues[], int delayTime = 10) {
+void changeIntensity(int targetValues[], int delayTime) {
   int tempValues[2];          // Tymczasowe wartości PWM
   for (int i = 0; i < 2; i++) {
     tempValues[i] = values[i];
@@ -376,7 +384,10 @@ void changeIntensity(int targetValues[], int delayTime = 10) {
         } else {
           readyFlag[i] = true; // Osiągnięto wartość docelową
         }
-        analogWrite(pins[i], tempValues[i]); // Ustawienie nowej wartości PWM
+
+        for (int cntPins = 0; cntPins < 4; cntPins++) {
+          pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
+        }
       }
     }
     delay(delayTime); // Małe opóźnienie dla płynniejszej zmiany
