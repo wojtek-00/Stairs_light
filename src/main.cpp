@@ -1,6 +1,20 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <WebServer.h>
+
+
+// ######### INTERNET ###############
+
+const char* ssid = "DOM_ZZZR";          // Nazwa sieci Wi-Fi
+const char* password = "eWF8qn8tnfgSga5Vkv7E";      // Hasło do sieci Wi-Fi
+
+// Statyczny adres IP, maska podsieci, brama
+IPAddress staticIP(192, 168, 8, 61);  // Adres IP
+IPAddress gateway(192, 168, 8, 1);      // Brama (router)
+IPAddress subnet(255, 255, 255, 0);     // Maska podsieci
+
+WebServer server(80);
 
 int pinsLight[4][2] = {        // Piny wyjściowe -> 5. White, 6. Yellow
         {1, 5},
@@ -10,8 +24,10 @@ int pinsLight[4][2] = {        // Piny wyjściowe -> 5. White, 6. Yellow
 };
 
 
-
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40); // Adres domyślny 0x40
+unsigned long checkLightReceiving = 5400000;
+unsigned long oldLightReceiving = 0;
+
 
 
 int values[2] = {0, 0};         // Aktualne wartości PWM
@@ -20,15 +36,14 @@ int newValues[2] = {0, 0};      // Docelowe wartości PWM
 
 int commandNumber = 0;
 
-
+double lightVal = 100.0;
 
 // SENSORS
 const int NUM_SENSORS = 4;              // Liczba czujników
-const int PIR_PINS[NUM_SENSORS] = {9, 10, 11, 12}; // Piny, do których podłączone są czujniki PIR
+const int PIR_PINS[NUM_SENSORS] = {16, 27, 26, 14}; // Piny, do których podłączone są czujniki PIR
 int highCount[NUM_SENSORS] = {0};           // Liczniki dla każdego sensora
 int threshold = 10;                          // Liczba wymaganych sygnałów HIGH
 bool motionDetected = false;
-
 
 bool toDimm = false;
 bool turnOffMotion = false;
@@ -51,7 +66,7 @@ bool dayModeFlag = false;
 int dayLightValue = 30;
 unsigned long tempOffTime = 0;
 
-const int buttonPin = 7;      // Pin, do którego podłączony jest przycisk
+const int buttonPin = 25;      // Pin, do którego podłączony jest przycisk
 int buttonState = 0;          // Zmienna przechowująca stan przycisku
 int lastButtonState = 0;      // Ostatni stan przycisku
 unsigned long lastDebounceTime = 0;  // Czas ostatniej zmiany stanu
@@ -70,18 +85,19 @@ void changeIntensity(int targetValues[], int delayTime = 10);
 void selectCommand(int command);
 
 void setup() {
+  delay(5000);
   Serial.println("Setup: ");
 
   Wire.begin();
   pwm.begin();
 
   for (int cntPins = 0; cntPins < 4; cntPins++) {
-    for (int i = 0; i < 2; i++){
-      pinMode(pinsLight[cntPins][i], OUTPUT);
+    for (int i = 0; i < 2; i++) {  
+      pwm.setPWM(pinsLight[cntPins][i], 0, 0);
     }
   }
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   Serial.println("  Check LEDs");
   int setupValues[2] = {0, 0};
@@ -106,9 +122,51 @@ void setup() {
     pinMode(PIR_PINS[i], INPUT);
   }
 
+  // INTERNET
+
+  WiFi.config(staticIP, gateway, subnet);
+   // Łączenie z Wi-Fi
+  Serial.println("Łączenie z Wi-Fi...");
+  WiFi.begin(ssid, password);
+
+  // Czekanie na połączenie
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+
+  // Wyświetlenie informacji o połączeniu
+  Serial.println("");
+  Serial.println("Połączono z Wi-Fi!");
+  Serial.print("Adres IP: ");
+  Serial.println(WiFi.localIP());
+//_______________________________________
+
+server.on("/data", HTTP_GET, [](){
+  String lightStr = server.arg("light");  // Otrzymanie wartości jako String
+  lightVal = lightStr.toDouble();            // Konwersja String na double i zapisanie w zmiennej globalnej
+
+  oldLightReceiving = millis();
+  // Debugowanie
+  Serial.print("Dane odebrane: ");
+  Serial.println(lightVal);
+
+  String response = "Dane z parametru odebrane";
+  server.send(200, "text/plain", response);
+});
+
+server.begin();
+
+
 }
 
 void loop() {
+  server.handleClient();
+
+  if (millis() - oldLightReceiving > checkLightReceiving) {
+    lightVal = lvlYellowLight -1;
+  }
+
   motionDetected = 0;
   int effectNumber = 0;
   
@@ -224,14 +282,8 @@ void loop() {
 
   if (!disableBySwitch) {
     if (!turnOffMotion){
-      // here logic for light
-      
-      /* if (// light) {
-        LDRValue = ;
-      } else {
-        // Jeśli wartość jest 0, być może światło jest poza zakresem czujnika
-        LDRValue = 0;
-      } */
+
+      LDRValue = lightVal;
   }
 
   if (LDRValue > dayLightValue){
@@ -255,8 +307,8 @@ void loop() {
       }
 
       if (highCount[i] >= threshold) {
-        //Serial.print("Motion Detected on Sensor ");
-        //Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
+        Serial.print("Motion Detected on Sensor ");
+        Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
         motionDetected = true; // Ustawia flagę ruchu
         highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
       }
