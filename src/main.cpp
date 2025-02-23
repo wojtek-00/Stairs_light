@@ -6,7 +6,7 @@
 
 // ######### INTERNET ###############
 
-const char* ssid = "DOM_ZZZR";          // Nazwa sieci Wi-Fi
+const char* ssid = "DOM_ZZR_IoT";          // Nazwa sieci Wi-Fi
 const char* password = "eWF8qn8tnfgSga5Vkv7E";      // Hasło do sieci Wi-Fi
 
 // Statyczny adres IP, maska podsieci, brama
@@ -17,10 +17,10 @@ IPAddress subnet(255, 255, 255, 0);     // Maska podsieci
 WebServer server(80);
 
 int pinsLight[4][2] = {        // Piny wyjściowe -> 5. White, 6. Yellow
-        {1, 5},
-        {2, 6},
-        {3, 7},
-        {4, 8}
+  {0, 1},
+  {2, 3},
+  {4, 5},
+  {6, 7}
 };
 
 
@@ -80,24 +80,39 @@ bool disableBySwitch = false;
 bool isOnFlag = false;
 
 
-void changeIntensity(int targetValues[], int delayTime = 10);
+// relay pin
+const int relayPin = 32;
+
+void changeIntensity(int targetValues[], int delayTime = 0);
 
 void selectCommand(int command);
 
 void setup() {
-  delay(5000);
+  delay(3000);
+  Serial.begin(115200);
   Serial.println("Setup: ");
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
 
   Wire.begin();
   pwm.begin();
+  
 
   for (int cntPins = 0; cntPins < 4; cntPins++) {
     for (int i = 0; i < 2; i++) {  
       pwm.setPWM(pinsLight[cntPins][i], 0, 0);
     }
   }
+  Serial.println("  Set PWM Pins");
+  /*
+  for (int i = 0; i < 16; i++) {
+    pwm.setPWM(i, 0, 0);
+  } */
 
-  Serial.begin(115200);
+
+  digitalWrite(relayPin, HIGH);
+
+  
 
   Serial.println("  Check LEDs");
   int setupValues[2] = {0, 0};
@@ -129,11 +144,11 @@ void setup() {
   Serial.println("Łączenie z Wi-Fi...");
   WiFi.begin(ssid, password);
 
-  // Czekanie na połączenie
+  /* // Czekanie na połączenie
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
-  }
+  } */
 
   // Wyświetlenie informacji o połączeniu
   Serial.println("");
@@ -157,7 +172,8 @@ server.on("/data", HTTP_GET, [](){
 
 server.begin();
 
-
+  Serial.println("Setup done");
+  delay(5000);
 }
 
 void loop() {
@@ -225,8 +241,8 @@ void loop() {
           } else {
             Serial.println("Turn On");
             disableBySwitch = true;
-            onValues[0] = 4096;
-            onValues[1] = 0;
+            onValues[0] = 0;
+            onValues[1] = 1200;
             changeIntensity(onValues);
             isOnFlag = true;
           }
@@ -236,30 +252,33 @@ void loop() {
           Serial.println("Sensors");
           int onDelay = 200;
           delay(onDelay);
-         /*  analogWrite(pins[0], 0);
-          analogWrite(pins[1], 0);
-          delay(onDelay);
-          analogWrite(pins[0], 100);
-          analogWrite(pins[1], 0);
-          delay(onDelay);
-          analogWrite(pins[0], 0);
-          analogWrite(pins[1], 0);
-          delay(onDelay);
-          analogWrite(pins[0], 0);
-          analogWrite(pins[1], 100);
-          delay(onDelay);
-          analogWrite(pins[0], 0);
-          analogWrite(pins[1], 0);
-          delay(onDelay);
-          analogWrite(pins[0], 100);
-          analogWrite(pins[1], 0);
-          delay(onDelay);
-          delay(onDelay);
-          analogWrite(pins[0], 0);
-          analogWrite(pins[1], 0); */
-          onValues[0] = 0;
-          onValues[1] = 0;
-          changeIntensity(onValues);
+
+          pwm.setPWM(0, 0, 1000);
+          delay(300);
+
+          pwm.setPWM(0, 0, 0);
+          pwm.setPWM(1, 0, 0);
+          delay(300);
+
+          pwm.setPWM(0, 0, 0);
+          pwm.setPWM(1, 0, 1000);
+          delay(300);
+
+          pwm.setPWM(0, 0, 0);
+          pwm.setPWM(1, 0, 0);
+          delay(300);
+
+          pwm.setPWM(0, 0, 1000);
+          pwm.setPWM(1, 0, 0);
+          delay(300);
+
+          pwm.setPWM(0, 0, 0);
+          pwm.setPWM(1, 0, 0);
+
+
+          values[0] = 0;
+          values[0] = 1;
+
           delay(onDelay);
           delay(100);
 
@@ -394,8 +413,8 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 2000;  // White Light
-      newValues[1] = 2500;  // Yellow Light
+      newValues[0] = 1000;  // White Light
+      newValues[1] = 1500;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
@@ -406,12 +425,12 @@ void selectCommand(int command) {
     case 4:
       newValues[0] = 0; // Docelowe wartości
       newValues[1] = 800;
-      changeIntensity(newValues, 20);
+      changeIntensity(newValues);
       break;
     case 5:
-      newValues[0] = 700; // Docelowe wartości
+      newValues[0] = 300; // Docelowe wartości
       newValues[1] = 0;
-      changeIntensity(newValues, 20);
+      changeIntensity(newValues);
       break;
   }
 }
@@ -430,17 +449,22 @@ void changeIntensity(int targetValues[], int delayTime) {
     for (int i = 0; i < 2; i++) {
       if (!readyFlag[i]) {  // Działaj tylko na kanale, który nie jest gotowy
         if (tempValues[i] < targetValues[i]) {
-          tempValues[i]++;
+          tempValues[i] += 10;
         } else if (tempValues[i] > targetValues[i]) {
-          tempValues[i]--;
+          tempValues[i] -= 10;
         } else {
           readyFlag[i] = true; // Osiągnięto wartość docelową
         }
+      }
 
-        for (int cntPins = 0; cntPins < 4; cntPins++) {
+
+      for (int cntPins = 0; cntPins < 4; cntPins++) {
+        for(int cntColour = 0; cntColour < 2; cntColour++) {
           pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
+          
         }
       }
+        
     }
     delay(delayTime); // Małe opóźnienie dla płynniejszej zmiany
   }
