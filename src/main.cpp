@@ -36,7 +36,7 @@ int newValues[2] = {0, 0};      // Docelowe wartości PWM
 
 int commandNumber = 0;
 
-double lightVal = 100.0;
+double lightVal = 0.0;
 
 // SENSORS
 const int NUM_SENSORS = 4;              // Liczba czujników
@@ -57,7 +57,7 @@ unsigned long delayOffInterval = 120000;  // Time after that the light will be t
 // LIGHT SENSOR VALUES
 int lvlYellowLight = 7;
 int lvlWhiteLight = 30;
-
+bool downStairsMode = false;
 bool readPir = true;
 
 
@@ -79,11 +79,12 @@ bool isCounting = false;      // Flaga, która określa, czy liczymy kliknięcia
 bool disableBySwitch = false;
 bool isOnFlag = false;
 
+bool noFirstReading = true;
 
 // relay pin
 const int relayPin = 32;
 
-void changeIntensity(int targetValues[], int delayTime = 0);
+void changeIntensity(int targetValues[], int delayTime = 0, bool dayMode = false);
 
 void selectCommand(int command);
 
@@ -104,30 +105,12 @@ void setup() {
     }
   }
   Serial.println("  Set PWM Pins");
-  /*
-  for (int i = 0; i < 16; i++) {
-    pwm.setPWM(i, 0, 0);
-  } */
-
-
   digitalWrite(relayPin, HIGH);
 
   
 
   Serial.println("  Check LEDs");
   int setupValues[2] = {0, 0};
-  // changeIntensity(setupValues);
-  // delay(1000);
-  // setupValues[0] = 255;
-  // setupValues[1] = 0;
-  // changeIntensity(setupValues);
-  // delay(1000);
-  // setupValues[0] = 0;
-  // setupValues[1] = 255;
-  // changeIntensity(setupValues);
-  // delay(1000);
-  // setupValues[0] = 0;
-  // setupValues[1] = 0;
   changeIntensity(setupValues);
 
   pinMode(buttonPin, INPUT_PULLUP);
@@ -165,9 +148,11 @@ server.on("/data", HTTP_GET, [](){
   // Debugowanie
   Serial.print("Dane odebrane: ");
   Serial.println(lightVal);
-
   String response = "Dane z parametru odebrane";
   server.send(200, "text/plain", response);
+  if (noFirstReading) {
+    noFirstReading = false;
+  }
 });
 
 server.begin();
@@ -177,10 +162,11 @@ server.begin();
 }
 
 void loop() {
+  downStairsMode = false;
   server.handleClient();
 
   if (millis() - oldLightReceiving > checkLightReceiving) {
-    lightVal = lvlYellowLight -1;
+    lightVal = lvlYellowLight - 1;
   }
 
   motionDetected = 0;
@@ -277,11 +263,9 @@ void loop() {
 
 
           values[0] = 0;
-          values[0] = 1;
+          values[1] = 0;
 
           delay(onDelay);
-          delay(100);
-
           disableBySwitch = false;
           turnOffMotion = false;
           toDimm = false;
@@ -300,10 +284,7 @@ void loop() {
   
 
   if (!disableBySwitch) {
-    if (!turnOffMotion){
-
-      LDRValue = lightVal;
-  }
+    LDRValue = lightVal;
 
   if (LDRValue > dayLightValue){
     dayModeFlag = true;
@@ -311,6 +292,10 @@ void loop() {
   } else {
     dayModeFlag = false;
     tempOffTime = delayOffInterval;
+  }
+
+  if (noFirstReading) {
+    LDRValue = lvlYellowLight - 1;
   }
 
 
@@ -371,7 +356,7 @@ void loop() {
         toDimm = false;
       }
     }
-
+    
     if (turnOffMotion) {
       if (millis() - lastTriggerSignalTime >= tempOffTime) {
         Serial.println("Turn Off");
@@ -381,8 +366,9 @@ void loop() {
       }
     }
 
-      //Serial.println(millis() - lastTriggerSignalTime);
-      //printTime(millis() - lastTriggerSignalTime);
+    
+    //Serial.println(millis() - lastTriggerSignalTime);
+    //printTime(millis() - lastTriggerSignalTime);
     
   } //turnOffMotion
   
@@ -413,31 +399,32 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 1000;  // White Light
-      newValues[1] = 1500;  // Yellow Light
+      newValues[0] = 500;  // White Light
+      newValues[1] = 600;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 1500;
+      newValues[1] = 900;
       changeIntensity(newValues);
       break;
     case 4:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 800;
+      newValues[1] = 400;
       changeIntensity(newValues);
       break;
     case 5:
-      newValues[0] = 300; // Docelowe wartości
-      newValues[1] = 0;
-      changeIntensity(newValues);
+      downStairsMode = true;
+      newValues[0] = 0; // Docelowe wartości
+      newValues[1] = 300;
+      changeIntensity(newValues, 0, downStairsMode);
       break;
   }
 }
 
 
 
-void changeIntensity(int targetValues[], int delayTime) {
+void changeIntensity(int targetValues[], int delayTime, bool dayMode) {
   int tempValues[2];          // Tymczasowe wartości PWM
   for (int i = 0; i < 2; i++) {
     tempValues[i] = values[i];
@@ -446,6 +433,9 @@ void changeIntensity(int targetValues[], int delayTime) {
   bool readyFlag[2] = {false, false};  // Flagi stanu dla każdego kanału
 
   while (!(readyFlag[0] && readyFlag[1])) { // Dopóki oba kanały nie osiągną celu
+    Serial.print(tempValues[0]);
+    Serial.print("\t");
+    Serial.println(tempValues[1]);
     for (int i = 0; i < 2; i++) {
       if (!readyFlag[i]) {  // Działaj tylko na kanale, który nie jest gotowy
         if (tempValues[i] < targetValues[i]) {
@@ -456,13 +446,27 @@ void changeIntensity(int targetValues[], int delayTime) {
           readyFlag[i] = true; // Osiągnięto wartość docelową
         }
       }
+      
+      if (!dayMode){
 
-
-      for (int cntPins = 0; cntPins < 4; cntPins++) {
-        for(int cntColour = 0; cntColour < 2; cntColour++) {
-          pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
+        for (int cntPins = 0; cntPins < 4; cntPins++) {
+          for(int cntColour = 0; cntColour < 2; cntColour++) {
+            pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
+          }
+        }
+      } else {
+        for (int cntPins = 0; cntPins < 2; cntPins++) {
+          for(int cntColour = 0; cntColour < 2; cntColour++) {
+            pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
+          }
+        }
+        for (int cntPins = 2; cntPins < 4; cntPins++) {
+          for(int cntColour = 0; cntColour < 2; cntColour++) {
+            pwm.setPWM(pinsLight[cntPins][i], 0, 0);
+          }
           
         }
+
       }
         
     }
@@ -473,4 +477,5 @@ void changeIntensity(int targetValues[], int delayTime) {
   for (int i = 0; i < 2; i++) {
     values[i] = tempValues[i];
   }
+
 }
