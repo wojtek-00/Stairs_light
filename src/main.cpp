@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <WebServer.h>
+#include "time.h"
 
 
 // ######### INTERNET ###############
@@ -84,6 +85,12 @@ bool noFirstReading = true;
 // relay pin
 const int relayPin = 32;
 
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;
+
+void printLocalTime();
+
 void changeIntensity(int targetValues[], int delayTime = 0, bool dayMode = false);
 
 void selectCommand(int command);
@@ -122,13 +129,13 @@ void setup() {
 
   // INTERNET
 
-  WiFi.config(staticIP, gateway, subnet);
+  //WiFi.config(staticIP, gateway, subnet);
    // Łączenie z Wi-Fi
   Serial.println("Łączenie z Wi-Fi...");
   WiFi.begin(ssid, password);
 
-  /* // Czekanie na połączenie
-  while (WiFi.status() != WL_CONNECTED) {
+   // Czekanie na połączenie
+  /* while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
   } */
@@ -139,6 +146,24 @@ void setup() {
   Serial.print("Adres IP: ");
   Serial.println(WiFi.localIP());
 //_______________________________________
+
+// TIME
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
+
+  WiFi.disconnect();
+  Serial.println("Rozłączono z Wi-Fi");
+  delay(1000);
+
+  //WiFi.config(staticIP, gateway, subnet);
+   // Łączenie z Wi-Fi
+  WiFi.config(staticIP, gateway, subnet);
+  Serial.println("Łączenie z Wi-Fi...");
+  WiFi.begin(ssid, password);
+  Serial.println("");
+  Serial.println("Ponownie połączono z Wi-Fi!");
+  Serial.print("Adres IP: ");
+  Serial.println(WiFi.localIP());
 
 server.on("/data", HTTP_GET, [](){
   String lightStr = server.arg("light");  // Otrzymanie wartości jako String
@@ -158,10 +183,44 @@ server.on("/data", HTTP_GET, [](){
 server.begin();
 
   Serial.println("Setup done");
-  delay(5000);
+  pwm.setPWM(0, 0, 1000);
+  delay(300);
+
+  pwm.setPWM(0, 0, 0);
+  pwm.setPWM(1, 0, 0);
+  delay(300);
+
+  pwm.setPWM(0, 0, 0);
+  pwm.setPWM(1, 0, 1000);
+  delay(300);
+
+  pwm.setPWM(0, 0, 0);
+  pwm.setPWM(1, 0, 0);
+  delay(300);
+
+  pwm.setPWM(0, 0, 1000);
+  pwm.setPWM(1, 0, 0);
+  delay(300);
+
+  pwm.setPWM(0, 0, 0);
+  pwm.setPWM(1, 0, 0);
+
+
+  values[0] = 0;
+  values[1] = 0;
+  delay(1000);
 }
 
 void loop() {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  char timeHour[3];
+  strftime(timeHour,3, "%H", &timeinfo);
+  int hour = atoi(timeHour);
+
   downStairsMode = false;
   server.handleClient();
 
@@ -285,13 +344,16 @@ void loop() {
 
   if (!disableBySwitch) {
     LDRValue = lightVal;
-
+  bool manualEvening = false;
   if (LDRValue > dayLightValue){
     dayModeFlag = true;
     tempOffTime = delayDimmInterval;
   } else {
     dayModeFlag = false;
     tempOffTime = delayOffInterval;
+    if (LDRValue < lvlYellowLight) {
+      manualEvening = true;
+    }
   }
 
   if (noFirstReading) {
@@ -301,21 +363,23 @@ void loop() {
 
     //Serial.println(LDRValue);
     
-    for (int i = 0; i < NUM_SENSORS; i++) {
-      int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
 
-      if (pirState == HIGH) {
-        highCount[i]++; // Zwiększ licznik dla danego sensora
-      } else {
-        highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
-      }
+    if (pirState == HIGH) {
+      highCount[i]++; // Zwiększ licznik dla danego sensora
+    } else {
+      highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
+    }
 
-      if (highCount[i] >= threshold) {
-        Serial.print("Motion Detected on Sensor ");
-        Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
-        motionDetected = true; // Ustawia flagę ruchu
-        highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
-      }
+    if (highCount[i] >= threshold) {
+      Serial.print("Motion Detected on Sensor ");
+      Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
+      motionDetected = true; // Ustawia flagę ruchu
+      highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
+    }
+
+    
   }
   
 
@@ -331,7 +395,7 @@ void loop() {
           turnOffMotion = true;
           toDimm = true;
         }
-      } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
+      } else if ((LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) || (manualEvening)) {
         if (motionDetected == HIGH) {
           Serial.println("White Light");
           effectNumber = 2;
@@ -399,24 +463,24 @@ void selectCommand(int command) {
       changeIntensity(newValues);
       break;
     case 2:   // Yellow
-      newValues[0] = 500;  // White Light
-      newValues[1] = 600;  // Yellow Light
+      newValues[0] = 150;  // White Light
+      newValues[1] = 450;  // Yellow Light
       changeIntensity(newValues);
       break;
     case 3:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 900;
+      newValues[1] = 400;
       changeIntensity(newValues);
       break;
     case 4:
       newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 400;
+      newValues[1] = 200;
       changeIntensity(newValues);
       break;
     case 5:
       downStairsMode = true;
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 300;
+      newValues[0] = 300; // Docelowe wartości
+      newValues[1] = 0;
       changeIntensity(newValues, 0, downStairsMode);
       break;
   }
@@ -478,4 +542,25 @@ void changeIntensity(int targetValues[], int delayTime, bool dayMode) {
     values[i] = tempValues[i];
   }
 
+}
+
+void printLocalTime(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+
+  Serial.print("Month: ");
+  Serial.println(&timeinfo, "%B");
+  Serial.print("Day of Month: ");
+  Serial.println(&timeinfo, "%d");
+  Serial.print("Year: ");
+  Serial.println(&timeinfo, "%Y");
+  Serial.print("Hour: ");
+  Serial.println(&timeinfo, "%H");
+  Serial.print("Minute: ");
+  Serial.println(&timeinfo, "%M");
+  Serial.print("Second: ");
+  Serial.println(&timeinfo, "%S");
 }
