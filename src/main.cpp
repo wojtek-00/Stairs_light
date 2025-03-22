@@ -41,7 +41,7 @@ double lightVal = 0.0;
 
 // SENSORS
 const int NUM_SENSORS = 4;              // Liczba czujników
-const int PIR_PINS[NUM_SENSORS] = {16, 27, 26, 14}; // Piny, do których podłączone są czujniki PIR
+const int PIR_PINS[NUM_SENSORS] = {16, 26, 27, 14}; // Piny, do których podłączone są czujniki PIR
 int highCount[NUM_SENSORS] = {0};           // Liczniki dla każdego sensora
 int threshold = 10;                          // Liczba wymaganych sygnałów HIGH
 bool motionDetected = false;
@@ -366,6 +366,12 @@ void loop() {
   for (int i = 0; i < NUM_SENSORS; i++) {
     int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
 
+    if (dayModeFlag) {
+      if (i == 3) {
+        pirState = 0;
+      }
+    }
+
     if (pirState == HIGH) {
       highCount[i]++; // Zwiększ licznik dla danego sensora
     } else {
@@ -460,7 +466,7 @@ void selectCommand(int command) {
     case 1:
       newValues[0] = 0; // Docelowe wartości
       newValues[1] = 0;
-      changeIntensity(newValues);
+      changeIntensity(newValues, 0, dayModeFlag);
       break;
     case 2:   // Yellow
       newValues[0] = 150;  // White Light
