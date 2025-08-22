@@ -44,7 +44,7 @@ int commandNumber = 0;
 double lightVal = 0.0;
 
 const int NUM_SENSORS = 4;              
-const int PIR_PINS[NUM_SENSORS] = {16, 27, 26, 14}; 
+const int PIR_PINS[NUM_SENSORS] = {16, 26, 27, 14}; 
 int highCount[NUM_SENSORS] = {0};           
 int threshold = 10;                          
 bool motionDetected = false;
@@ -253,9 +253,11 @@ void loop() {
   if (!disableBySwitch) {
     LDRValue = lightVal;
     if (LDRValue > dayLightValue){
-      dayModeFlag = true; tempOffTime = delayDimmInterval;
+      dayModeFlag = true; 
+      tempOffTime = delayDimmInterval;
     } else {
-      dayModeFlag = false; tempOffTime = delayOffInterval;
+      dayModeFlag = false; 
+      tempOffTime = delayOffInterval;
     }
     if (noFirstReading) {
       LDRValue = lvlYellowLight - 1;
