@@ -58,12 +58,12 @@ unsigned long delayDimmInterval = 20000;
 unsigned long delayOffInterval = 60000;  
 
 int lvlYellowLight = 7;
-int lvlWhiteLight = 30;
+int lvlWhiteLight = 50;
 bool downStairsMode = false;
 bool readPir = true;
 
 bool dayModeFlag = false;
-int dayLightValue = 30;
+int dayLightValue = 50;
 unsigned long tempOffTime = 0;
 
 const int buttonPin = 25;      
@@ -270,7 +270,7 @@ void loop() {
           pirState = 0;
         }
       }
-      
+
       if (pirState == HIGH) {
         highCount[i]++; 
       } else {
@@ -288,31 +288,40 @@ void loop() {
     if (!dayModeFlag) {
       if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          logPrintln("Yellow Light");
-          effectNumber = 3; turnOffMotion = true; toDimm = true;
+          logPrintln("Evening Mode");
+          effectNumber = 3; 
+          turnOffMotion = true; 
+          toDimm = true;
         }
       } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          logPrintln("White Light");
-          effectNumber = 2; turnOffMotion = true; toDimm = true;
+          logPrintln("Night Mode");
+          effectNumber = 2; 
+          turnOffMotion = true; 
+          toDimm = true;
         }
       }
     } else if (dayModeFlag) {
       if (motionDetected == HIGH) {
         logPrintln("Day Light");
-        effectNumber = 5; turnOffMotion = true; toDimm = false;
+        effectNumber = 5; 
+        turnOffMotion = true; 
+        toDimm = false;
       }
     }
     if (turnOffMotion && toDimm) {
       if (millis() - lastTriggerSignalTime >= delayDimmInterval) {
         logPrintln("Dimm");
-        effectNumber = 4; toDimm = false;
+        effectNumber = 4; 
+        toDimm = false;
       }
     }
     if (turnOffMotion) {
       if (millis() - lastTriggerSignalTime >= tempOffTime) {
         logPrintln("Turn Off");
-        effectNumber = 1; turnOffMotion = false; toDimm = false;
+        effectNumber = 1; 
+        turnOffMotion = false; 
+        toDimm = false;
       }
     }
   } 
@@ -322,21 +331,31 @@ void loop() {
 void selectCommand(int command) {
   switch (command) {
     case 1:
-      newValues[0] = 0; newValues[1] = 0;
-      changeIntensity(newValues); break;
+      newValues[0] = 0; 
+      newValues[1] = 0;
+      changeIntensity(newValues); 
+      break;
     case 2:
-      newValues[0] = 500; newValues[1] = 600;
-      changeIntensity(newValues); break;
+      newValues[0] = 500; 
+      newValues[1] = 600;
+      changeIntensity(newValues); 
+      break;
     case 3:
-      newValues[0] = 0; newValues[1] = 900;
-      changeIntensity(newValues); break;
+      newValues[0] = 0; 
+      newValues[1] = 900;
+      changeIntensity(newValues); 
+      break;
     case 4:
-      newValues[0] = 0; newValues[1] = 400;
-      changeIntensity(newValues); break;
+      newValues[0] = 0; 
+      newValues[1] = 400;
+      changeIntensity(newValues); 
+      break;
     case 5:
       downStairsMode = true;
-      newValues[0] = 0; newValues[1] = 300;
-      changeIntensity(newValues, 0, downStairsMode); break;
+      newValues[0] = 0; 
+      newValues[1] = 300;
+      changeIntensity(newValues, 0, downStairsMode); 
+      break;
   }
 }
 
