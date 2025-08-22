@@ -101,7 +101,7 @@ void setup() {
     }
   }
   logPrintln("  Set PWM Pins");
-  digitalWrite(relayPin, HIGH);
+ // digitalWrite(relayPin, HIGH);
 
   logPrintln("  Check LEDs");
   int setupValues[2] = {0, 0};
@@ -315,7 +315,7 @@ void selectCommand(int command) {
     case 1:
       newValues[0] = 0; newValues[1] = 0;
       changeIntensity(newValues); break;
-    case 2:   
+    case 2:
       newValues[0] = 500; newValues[1] = 600;
       changeIntensity(newValues); break;
     case 3:
@@ -335,6 +335,11 @@ void changeIntensity(int targetValues[], int delayTime, bool dayMode) {
   int tempValues[2];          
   for (int i = 0; i < 2; i++) tempValues[i] = values[i];
   bool readyFlag[2] = {false, false};  
+
+  // --- Włącz przekaźnik od razu przy rozjaśnianiu ---
+  if (targetValues[0] > 0 || targetValues[1] > 0) {
+    digitalWrite(relayPin, HIGH);   // włącz zasilanie lamp
+  }
 
   while (!(readyFlag[0] && readyFlag[1])) {
     for (int i = 0; i < 2; i++) {
@@ -358,5 +363,12 @@ void changeIntensity(int targetValues[], int delayTime, bool dayMode) {
     }
     delay(delayTime);
   }
+
+  // zapisz nowe wartości
   for (int i = 0; i < 2; i++) values[i] = tempValues[i];
+
+  // --- wyłącz przekaźnik dopiero po całkowitym zejściu do zera ---
+  if (values[0] == 0 && values[1] == 0) {
+    digitalWrite(relayPin, LOW);  // wyłącz zasilanie lamp
+  }
 }
