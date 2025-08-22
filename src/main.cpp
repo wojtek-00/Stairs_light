@@ -2,12 +2,13 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <WebServer.h>
+#include <WiFi.h>   // dla ESP32
 
 
 // ######### INTERNET ###############
 
-const char* ssid = "DOM_ZZR_IoT";          // Nazwa sieci Wi-Fi
-const char* password = "eWF8qn8tnfgSga5Vkv7E";      // Hasło do sieci Wi-Fi
+const char* ssid = "DOM_ZR_IoT";          // Nazwa sieci Wi-Fi
+const char* password = "OC4C7yLP3cRRf4S";      // Hasło do sieci Wi-Fi
 
 // Statyczny adres IP, maska podsieci, brama
 IPAddress staticIP(192, 168, 8, 61);  // Adres IP
@@ -51,7 +52,7 @@ int LDRValue = 0;
 unsigned long lastTriggerSignalTime = 0;
 
 unsigned long delayDimmInterval = 20000; // Time after that the light will be dimmed
-unsigned long delayOffInterval = 120000;  // Time after that the light will be turned off
+unsigned long delayOffInterval = 60000;  // Time after that the light will be turned off
 
 
 // LIGHT SENSOR VALUES
