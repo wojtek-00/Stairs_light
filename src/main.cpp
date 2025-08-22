@@ -264,6 +264,13 @@ void loop() {
     }
     for (int i = 0; i < NUM_SENSORS; i++) {
       int pirState = digitalRead(PIR_PINS[i]); 
+      
+      if (dayModeFlag) {
+        if (i == 3) {
+          pirState = 0;
+        }
+      }
+      
       if (pirState == HIGH) {
         highCount[i]++; 
       } else {
