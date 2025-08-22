@@ -2,48 +2,51 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <WebServer.h>
-#include <WiFi.h>   // dla ESP32
+#include <WiFi.h>
 
+// OTA
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+
+// TELNET
+#include <WiFiClient.h>
 
 // ######### INTERNET ###############
+const char* ssid = "DOM_ZR_IoT";          
+const char* password = "OC4C7yLP3cRRf4S";      
 
-const char* ssid = "DOM_ZR_IoT";          // Nazwa sieci Wi-Fi
-const char* password = "OC4C7yLP3cRRf4S";      // Hasło do sieci Wi-Fi
-
-// Statyczny adres IP, maska podsieci, brama
-IPAddress staticIP(192, 168, 8, 61);  // Adres IP
-IPAddress gateway(192, 168, 8, 1);      // Brama (router)
-IPAddress subnet(255, 255, 255, 0);     // Maska podsieci
+IPAddress staticIP(192, 168, 8, 61);  
+IPAddress gateway(192, 168, 8, 1);      
+IPAddress subnet(255, 255, 255, 0);     
 
 WebServer server(80);
 
-int pinsLight[4][2] = {        // Piny wyjściowe -> 5. White, 6. Yellow
-  {0, 1},
-  {2, 3},
-  {4, 5},
-  {6, 7}
-};
+// Telnet
+WiFiServer telnetServer(23);
+WiFiClient telnetClient;
+void logPrintln(const String &msg) {
+  Serial.println(msg);
+  if (telnetClient && telnetClient.connected()) {
+    telnetClient.println(msg);
+  }
+}
 
+// ---------- Twoje zmienne ----------
+int pinsLight[4][2] = { {0, 1}, {2, 3}, {4, 5}, {6, 7} };
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40); // Adres domyślny 0x40
 unsigned long checkLightReceiving = 5400000;
 unsigned long oldLightReceiving = 0;
 
-
-
-int values[2] = {0, 0};         // Aktualne wartości PWM
-int newValues[2] = {0, 0};      // Docelowe wartości PWM
-
-
+int values[2] = {0, 0};         
+int newValues[2] = {0, 0};      
 int commandNumber = 0;
-
 double lightVal = 0.0;
 
-// SENSORS
-const int NUM_SENSORS = 4;              // Liczba czujników
-const int PIR_PINS[NUM_SENSORS] = {16, 27, 26, 14}; // Piny, do których podłączone są czujniki PIR
-int highCount[NUM_SENSORS] = {0};           // Liczniki dla każdego sensora
-int threshold = 10;                          // Liczba wymaganych sygnałów HIGH
+const int NUM_SENSORS = 4;              
+const int PIR_PINS[NUM_SENSORS] = {16, 27, 26, 14}; 
+int highCount[NUM_SENSORS] = {0};           
+int threshold = 10;                          
 bool motionDetected = false;
 
 bool toDimm = false;
@@ -51,120 +54,124 @@ bool turnOffMotion = false;
 int LDRValue = 0;
 unsigned long lastTriggerSignalTime = 0;
 
-unsigned long delayDimmInterval = 20000; // Time after that the light will be dimmed
-unsigned long delayOffInterval = 60000;  // Time after that the light will be turned off
+unsigned long delayDimmInterval = 20000; 
+unsigned long delayOffInterval = 60000;  
 
-
-// LIGHT SENSOR VALUES
 int lvlYellowLight = 7;
 int lvlWhiteLight = 30;
 bool downStairsMode = false;
 bool readPir = true;
 
-
-// DAY MODE
 bool dayModeFlag = false;
 int dayLightValue = 30;
 unsigned long tempOffTime = 0;
 
-const int buttonPin = 25;      // Pin, do którego podłączony jest przycisk
-int buttonState = 0;          // Zmienna przechowująca stan przycisku
-int lastButtonState = 0;      // Ostatni stan przycisku
-unsigned long lastDebounceTime = 0;  // Czas ostatniej zmiany stanu
-unsigned long debounceDelay = 50;    // Czas debouncingu w milisekundach
-unsigned long clickTimeout = 1000;   // Czas oczekiwania na zakończenie zliczania kliknięć (w milisekundach)
-int clickCount = 0;           // Liczba kliknięć przycisku
-unsigned long lastClickTime = 0;    // Czas ostatniego kliknięcia
-bool isCounting = false;      // Flaga, która określa, czy liczymy kliknięcia
+const int buttonPin = 25;      
+int buttonState = 0;          
+int lastButtonState = 0;      
+unsigned long lastDebounceTime = 0;  
+unsigned long debounceDelay = 50;    
+unsigned long clickTimeout = 1000;   
+int clickCount = 0;           
+unsigned long lastClickTime = 0;    
+bool isCounting = false;      
 
 bool disableBySwitch = false;
 bool isOnFlag = false;
-
 bool noFirstReading = true;
 
-// relay pin
 const int relayPin = 32;
 
 void changeIntensity(int targetValues[], int delayTime = 0, bool dayMode = false);
-
 void selectCommand(int command);
 
 void setup() {
   delay(3000);
   Serial.begin(115200);
-  Serial.println("Setup: ");
+  logPrintln("Setup: ");
   pinMode(relayPin, OUTPUT);
   digitalWrite(relayPin, LOW);
 
   Wire.begin();
   pwm.begin();
   
-
   for (int cntPins = 0; cntPins < 4; cntPins++) {
     for (int i = 0; i < 2; i++) {  
       pwm.setPWM(pinsLight[cntPins][i], 0, 0);
     }
   }
-  Serial.println("  Set PWM Pins");
+  logPrintln("  Set PWM Pins");
   digitalWrite(relayPin, HIGH);
 
-  
-
-  Serial.println("  Check LEDs");
+  logPrintln("  Check LEDs");
   int setupValues[2] = {0, 0};
   changeIntensity(setupValues);
 
   pinMode(buttonPin, INPUT_PULLUP);
 
-  Serial.println("  Configure PIR");
+  logPrintln("  Configure PIR");
   for (int i = 0; i < NUM_SENSORS; i++) {
     pinMode(PIR_PINS[i], INPUT);
   }
 
-  // INTERNET
-
+  // ----------- WiFi -----------
   WiFi.config(staticIP, gateway, subnet);
-   // Łączenie z Wi-Fi
-  Serial.println("Łączenie z Wi-Fi...");
+  logPrintln("Łączenie z Wi-Fi...");
   WiFi.begin(ssid, password);
 
-  /* // Czekanie na połączenie
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.print(".");
-  } */
+  logPrintln("");
+  logPrintln("Połączono z Wi-Fi!");
+  logPrintln("Adres IP: " + WiFi.localIP().toString());
 
-  // Wyświetlenie informacji o połączeniu
-  Serial.println("");
-  Serial.println("Połączono z Wi-Fi!");
-  Serial.print("Adres IP: ");
-  Serial.println(WiFi.localIP());
-//_______________________________________
+  // ----------- OTA -----------
+  ArduinoOTA.setHostname("StairsLight");
+  ArduinoOTA
+    .onStart([]() { logPrintln("OTA Start"); })
+    .onEnd([]() { logPrintln("OTA End"); })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("OTA Error[%u]\n", error);
+    });
+  ArduinoOTA.begin();
+  logPrintln("OTA Ready");
 
-server.on("/data", HTTP_GET, [](){
-  String lightStr = server.arg("light");  // Otrzymanie wartości jako String
-  lightVal = lightStr.toDouble();            // Konwersja String na double i zapisanie w zmiennej globalnej
+  // ----------- WebServer -----------
+  server.on("/data", HTTP_GET, []() {
+    String lightStr = server.arg("light");
+    lightVal = lightStr.toDouble();
+    oldLightReceiving = millis();
+    logPrintln("Dane odebrane: " + String(lightVal));
+    server.send(200, "text/plain", "Dane z parametru odebrane");
+    if (noFirstReading) noFirstReading = false;
+  });
+  server.begin();
 
-  oldLightReceiving = millis();
-  // Debugowanie
-  Serial.print("Dane odebrane: ");
-  Serial.println(lightVal);
-  String response = "Dane z parametru odebrane";
-  server.send(200, "text/plain", response);
-  if (noFirstReading) {
-    noFirstReading = false;
-  }
-});
+  // ----------- Telnet -----------
+  telnetServer.begin();
+  telnetServer.setNoDelay(true);
+  logPrintln("Telnet server started");
 
-server.begin();
-
-  Serial.println("Setup done");
-  delay(5000);
+  logPrintln("Setup done");
 }
 
 void loop() {
   downStairsMode = false;
   server.handleClient();
+  ArduinoOTA.handle();
+
+  // Obsługa Telnet
+  if (telnetServer.hasClient()) {
+    if (!telnetClient || !telnetClient.connected()) {
+      if (telnetClient) telnetClient.stop();
+      telnetClient = telnetServer.available();
+      logPrintln("Nowy klient telnet.");
+    } else {
+      WiFiClient extra = telnetServer.available();
+      extra.stop();
+    }
+  }
 
   if (millis() - oldLightReceiving > checkLightReceiving) {
     lightVal = lvlYellowLight - 1;
@@ -173,9 +180,8 @@ void loop() {
   motionDetected = 0;
   int effectNumber = 0;
   
-  if (Serial.available() > 0) {           // input in terminal
+  if (Serial.available() > 0) {           
     commandNumber = Serial.parseInt();
-    //Serial.println(commandNumber);
   }
 
   if (commandNumber != 0) {
@@ -183,300 +189,174 @@ void loop() {
   }
 
   //####################  BUTTON   ###########################
-  // Odczyt stanu przycisku
   int reading = digitalRead(buttonPin);
-
-  // Sprawdzanie, czy stan przycisku się zmienił
   if (reading != lastButtonState) {
-    lastDebounceTime = millis();  // Zapisz czas zmiany stanu
+    lastDebounceTime = millis();  
   }
-
-  // Jeśli upłynął wymagany czas debouncingu, zaktualizuj stan przycisku
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (reading != buttonState) {
       buttonState = reading;
-
-      // Sprawdzenie, czy przycisk jest wciśnięty
       if (buttonState == LOW) {
-        // Jeżeli przycisk został naciśnięty, zliczamy kliknięcia
         if (!isCounting) {
-          clickCount = 0;  // Resetowanie liczby kliknięć przed rozpoczęciem liczenia
-          isCounting = true;  // Rozpoczynamy liczenie kliknięć
-          lastClickTime = millis();  // Zapisz czas pierwszego kliknięcia
+          clickCount = 0;  
+          isCounting = true;  
+          lastClickTime = millis();  
         }
-        clickCount++;  // Zwiększamy liczbę kliknięć
-        Serial.print("Liczba kliknięć: ");
-        Serial.println(clickCount);
+        clickCount++;  
+        logPrintln("Liczba kliknięć: " + String(clickCount));
       }
     }
   }
-
-  // Sprawdzanie, czy upłynął czas na zakończenie liczenia kliknięć
   if (isCounting && (millis() - lastClickTime) > clickTimeout) {
-    // Po upływie czasu (np. 1 sekunda), interpretujemy liczbę kliknięć
     static int onValues[2] = {0, 0};
-      switch (clickCount) {
-        case 1:
-          // turn on
-          if (isOnFlag) {
-            Serial.println("Turn Off");
-            disableBySwitch = true;
-            onValues[0] = 0;
-            onValues[1] = 0;
-            changeIntensity(onValues);
-            isOnFlag = false;
-          } else {
-            Serial.println("Turn On");
-            disableBySwitch = true;
-            onValues[0] = 0;
-            onValues[1] = 1200;
-            changeIntensity(onValues);
-            isOnFlag = true;
-          }
-          break;
-        case 2:
-          // default sensors
-          Serial.println("Sensors");
-          int onDelay = 200;
-          delay(onDelay);
+    switch (clickCount) {
+      case 1:
+        if (isOnFlag) {
+          logPrintln("Turn Off");
+          disableBySwitch = true;
+          onValues[0] = 0; onValues[1] = 0;
+          changeIntensity(onValues);
+          isOnFlag = false;
+        } else {
+          logPrintln("Turn On");
+          disableBySwitch = true;
+          onValues[0] = 0; onValues[1] = 1200;
+          changeIntensity(onValues);
+          isOnFlag = true;
+        }
+        break;
+      case 2:
+        logPrintln("Sensors");
+        int onDelay = 200;
+        delay(onDelay);
 
-          pwm.setPWM(0, 0, 1000);
-          delay(300);
+        pwm.setPWM(0, 0, 1000); delay(300);
+        pwm.setPWM(0, 0, 0); pwm.setPWM(1, 0, 0); delay(300);
+        pwm.setPWM(0, 0, 0); pwm.setPWM(1, 0, 1000); delay(300);
+        pwm.setPWM(0, 0, 0); pwm.setPWM(1, 0, 0); delay(300);
+        pwm.setPWM(0, 0, 1000); pwm.setPWM(1, 0, 0); delay(300);
+        pwm.setPWM(0, 0, 0); pwm.setPWM(1, 0, 0);
 
-          pwm.setPWM(0, 0, 0);
-          pwm.setPWM(1, 0, 0);
-          delay(300);
-
-          pwm.setPWM(0, 0, 0);
-          pwm.setPWM(1, 0, 1000);
-          delay(300);
-
-          pwm.setPWM(0, 0, 0);
-          pwm.setPWM(1, 0, 0);
-          delay(300);
-
-          pwm.setPWM(0, 0, 1000);
-          pwm.setPWM(1, 0, 0);
-          delay(300);
-
-          pwm.setPWM(0, 0, 0);
-          pwm.setPWM(1, 0, 0);
-
-
-          values[0] = 0;
-          values[1] = 0;
-
-          delay(onDelay);
-          disableBySwitch = false;
-          turnOffMotion = false;
-          toDimm = false;
-          break;
-      }
-    // Resetowanie i przygotowanie do następnego cyklu
+        values[0] = 0; values[1] = 0;
+        delay(onDelay);
+        disableBySwitch = false;
+        turnOffMotion = false;
+        toDimm = false;
+        break;
+    }
     isCounting = false;
     clickCount = 0;
   }
-
-  // Zapisz aktualny stan przycisku
   lastButtonState = reading;
 
-
   //###############################################
-  
-
   if (!disableBySwitch) {
     LDRValue = lightVal;
-
-  if (LDRValue > dayLightValue){
-    dayModeFlag = true;
-    tempOffTime = delayDimmInterval;
-  } else {
-    dayModeFlag = false;
-    tempOffTime = delayOffInterval;
-  }
-
-  if (noFirstReading) {
-    LDRValue = lvlYellowLight - 1;
-  }
-
-
-    //Serial.println(LDRValue);
-    
+    if (LDRValue > dayLightValue){
+      dayModeFlag = true; tempOffTime = delayDimmInterval;
+    } else {
+      dayModeFlag = false; tempOffTime = delayOffInterval;
+    }
+    if (noFirstReading) {
+      LDRValue = lvlYellowLight - 1;
+    }
     for (int i = 0; i < NUM_SENSORS; i++) {
-      int pirState = digitalRead(PIR_PINS[i]); // Odczyt sygnału z danego czujnika PIR
-
+      int pirState = digitalRead(PIR_PINS[i]); 
       if (pirState == HIGH) {
-        highCount[i]++; // Zwiększ licznik dla danego sensora
+        highCount[i]++; 
       } else {
-        highCount[i] = 0; // Zresetuj licznik, jeśli sygnał nie jest HIGH
+        highCount[i] = 0; 
       }
-
       if (highCount[i] >= threshold) {
-        Serial.print("Motion Detected on Sensor ");
-        Serial.println(i + 1); // Wypisuje numer czujnika, na którym wykryto ruch
-        motionDetected = true; // Ustawia flagę ruchu
-        highCount[i] = 0;      // Opcjonalnie reset licznika po wykryciu
+        logPrintln("Motion Detected on Sensor " + String(i+1));
+        motionDetected = true; 
+        highCount[i] = 0;      
       }
-  }
-  
-
+    }
     if (motionDetected == HIGH) {
       lastTriggerSignalTime = millis(); 
     }
-
     if (!dayModeFlag) {
       if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          Serial.println("Yellow Light");
-          effectNumber = 3;
-          turnOffMotion = true;
-          toDimm = true;
+          logPrintln("Yellow Light");
+          effectNumber = 3; turnOffMotion = true; toDimm = true;
         }
       } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          Serial.println("White Light");
-          effectNumber = 2;
-          turnOffMotion = true;
-          toDimm = true;
+          logPrintln("White Light");
+          effectNumber = 2; turnOffMotion = true; toDimm = true;
         }
       }
     } else if (dayModeFlag) {
-        if (motionDetected == HIGH) {
-          Serial.println("Day Light");
-          effectNumber = 5;
-          turnOffMotion = true;
-          toDimm = false;
-        }
+      if (motionDetected == HIGH) {
+        logPrintln("Day Light");
+        effectNumber = 5; turnOffMotion = true; toDimm = false;
+      }
     }
-
     if (turnOffMotion && toDimm) {
       if (millis() - lastTriggerSignalTime >= delayDimmInterval) {
-        Serial.println("Dimm");
-        effectNumber = 4;
-        //turnOffMotion = false;
-        toDimm = false;
+        logPrintln("Dimm");
+        effectNumber = 4; toDimm = false;
       }
     }
-    
     if (turnOffMotion) {
       if (millis() - lastTriggerSignalTime >= tempOffTime) {
-        Serial.println("Turn Off");
-        effectNumber = 1;
-        turnOffMotion = false;
-        toDimm = false;
+        logPrintln("Turn Off");
+        effectNumber = 1; turnOffMotion = false; toDimm = false;
       }
     }
-
-    
-    //Serial.println(millis() - lastTriggerSignalTime);
-    //printTime(millis() - lastTriggerSignalTime);
-    
-  } //turnOffMotion
-  
-
-
-
-
+  } 
   selectCommand(effectNumber);
-}
-
-void printTime(unsigned long time) {
-  static unsigned long previousSecond = 0;
-  unsigned long currentSecond = time / 1000; // Obliczenie liczby sekund
-
-  // Wyświetlanie tylko, gdy zmienia się pełna sekunda
-  if (currentSecond != previousSecond) {
-    Serial.print("TIME:");
-    Serial.println(currentSecond);
-    previousSecond = currentSecond; // Aktualizacja ostatniej wyświetlonej sekundy
-  }
 }
 
 void selectCommand(int command) {
   switch (command) {
     case 1:
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 0;
-      changeIntensity(newValues);
-      break;
-    case 2:   // Yellow
-      newValues[0] = 500;  // White Light
-      newValues[1] = 600;  // Yellow Light
-      changeIntensity(newValues);
-      break;
+      newValues[0] = 0; newValues[1] = 0;
+      changeIntensity(newValues); break;
+    case 2:   
+      newValues[0] = 500; newValues[1] = 600;
+      changeIntensity(newValues); break;
     case 3:
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 900;
-      changeIntensity(newValues);
-      break;
+      newValues[0] = 0; newValues[1] = 900;
+      changeIntensity(newValues); break;
     case 4:
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 400;
-      changeIntensity(newValues);
-      break;
+      newValues[0] = 0; newValues[1] = 400;
+      changeIntensity(newValues); break;
     case 5:
       downStairsMode = true;
-      newValues[0] = 0; // Docelowe wartości
-      newValues[1] = 300;
-      changeIntensity(newValues, 0, downStairsMode);
-      break;
+      newValues[0] = 0; newValues[1] = 300;
+      changeIntensity(newValues, 0, downStairsMode); break;
   }
 }
 
-
-
 void changeIntensity(int targetValues[], int delayTime, bool dayMode) {
-  int tempValues[2];          // Tymczasowe wartości PWM
-  for (int i = 0; i < 2; i++) {
-    tempValues[i] = values[i];
-  }
+  int tempValues[2];          
+  for (int i = 0; i < 2; i++) tempValues[i] = values[i];
+  bool readyFlag[2] = {false, false};  
 
-  bool readyFlag[2] = {false, false};  // Flagi stanu dla każdego kanału
-
-  while (!(readyFlag[0] && readyFlag[1])) { // Dopóki oba kanały nie osiągną celu
-    Serial.print(tempValues[0]);
-    Serial.print("\t");
-    Serial.println(tempValues[1]);
+  while (!(readyFlag[0] && readyFlag[1])) {
     for (int i = 0; i < 2; i++) {
-      if (!readyFlag[i]) {  // Działaj tylko na kanale, który nie jest gotowy
-        if (tempValues[i] < targetValues[i]) {
-          tempValues[i] += 10;
-        } else if (tempValues[i] > targetValues[i]) {
-          tempValues[i] -= 10;
-        } else {
-          readyFlag[i] = true; // Osiągnięto wartość docelową
-        }
+      if (!readyFlag[i]) {
+        if (tempValues[i] < targetValues[i]) tempValues[i] += 10;
+        else if (tempValues[i] > targetValues[i]) tempValues[i] -= 10;
+        else readyFlag[i] = true;
       }
-      
       if (!dayMode){
-
         for (int cntPins = 0; cntPins < 4; cntPins++) {
-          for(int cntColour = 0; cntColour < 2; cntColour++) {
-            pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
-          }
+          pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
         }
       } else {
         for (int cntPins = 0; cntPins < 2; cntPins++) {
-          for(int cntColour = 0; cntColour < 2; cntColour++) {
-            pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
-          }
+          pwm.setPWM(pinsLight[cntPins][i], 0, tempValues[i]);
         }
         for (int cntPins = 2; cntPins < 4; cntPins++) {
-          for(int cntColour = 0; cntColour < 2; cntColour++) {
-            pwm.setPWM(pinsLight[cntPins][i], 0, 0);
-          }
-          
+          pwm.setPWM(pinsLight[cntPins][i], 0, 0);
         }
-
       }
-        
     }
-    delay(delayTime); // Małe opóźnienie dla płynniejszej zmiany
+    delay(delayTime);
   }
-
-  // Aktualizacja globalnych wartości
-  for (int i = 0; i < 2; i++) {
-    values[i] = tempValues[i];
-  }
-
+  for (int i = 0; i < 2; i++) values[i] = tempValues[i];
 }
