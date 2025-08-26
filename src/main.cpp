@@ -116,6 +116,7 @@ void setup() {
 
   // ----------- WiFi -----------
   WiFi.config(staticIP, gateway, subnet);
+  WiFi.setHostname("StairsLight");   // <-- to ustawia hostname w DHCP
   logPrintln("Łączenie z Wi-Fi...");
   WiFi.begin(ssid, password);
 
@@ -288,14 +289,14 @@ void loop() {
     if (!dayModeFlag) {
       if (LDRValue < lvlYellowLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          logPrintln("Evening Mode");
+          logPrintln("Night Mode");
           effectNumber = 3; 
           turnOffMotion = true; 
           toDimm = true;
         }
       } else if (LDRValue < lvlWhiteLight && (!turnOffMotion || !toDimm)) {
         if (motionDetected == HIGH) {
-          logPrintln("Night Mode");
+          logPrintln("Evening Mode");
           effectNumber = 2; 
           turnOffMotion = true; 
           toDimm = true;
@@ -336,13 +337,13 @@ void selectCommand(int command) {
       changeIntensity(newValues); 
       break;
     case 2:
-      newValues[0] = 500; 
-      newValues[1] = 600;
+      newValues[0] = 300; 
+      newValues[1] = 300;
       changeIntensity(newValues); 
       break;
     case 3:
       newValues[0] = 0; 
-      newValues[1] = 900;
+      newValues[1] = 400;
       changeIntensity(newValues); 
       break;
     case 4:
